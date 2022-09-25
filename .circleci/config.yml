@@ -212,7 +212,73 @@ jobs:
                 curl https://kvdb.io/UyJGdQd1UQtv7V9sUTQES3/migration_${CIRCLE_WORKFLOW_ID:0:7}  -d '1'
             fi
       - destroy-environment:
-          workflow-ID: ${CIRCLE_WORKFLOW_ID:0:7}    
+          workflow-ID: ${CIRCLE_WORKFLOW_ID:0:7}  
+
+  deploy-frontend:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - checkout
+      - run:
+          name: installing aws cli
+          command: |
+           curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+           unzip awscliv2.zip
+           sudo ./aws/install
+      - node-v13
+      - run:
+          name: Get backend url
+          command: |
+            export BACKEND_IP=$(aws ec2 describe-instances \
+            --query 'Reservations[*].Instances[*].PublicIpAddress' \
+            --filters "Name=tag:Name,Values=backend-${CIRCLE_WORKFLOW_ID:0:7}" \
+            --output text)
+            export API_URL="http://${BACKEND_IP}:3030"
+            echo "${API_URL}"
+            echo API_URL="http://${BACKEND_IP}:3030" >> frontend/.env
+            cat frontend/.env
+      - run:
+          name: Deploy frontend objects
+          command: |
+            cd frontend
+            npm install
+            npm run build
+            tar -czvf artifact-"${CIRCLE_WORKFLOW_ID:0:7}".tar.gz dist
+            aws s3 cp dist s3://udapeople-${CIRCLE_WORKFLOW_ID:0:7} --recursive
+      - destroy-environment:
+          workflow-ID: ${CIRCLE_WORKFLOW_ID:0:7}
+      - revert-migrations:
+          workflow-ID: ${CIRCLE_WORKFLOW_ID:0:7}
+
+  deploy-backend:
+    executor: ubuntu-stable-img
+    steps:
+      - checkout
+      - aws-cli
+      - ansible
+      - node-v13
+      - add_ssh_keys:
+          fingerprints: ["a8:19:fb:ef:31:83:04:81:9e:c8:c2:40:80:1f:99:15"]
+      - attach_workspace:
+          at: ~/
+      - run:
+          name: Deploy backend
+          command: |
+            cd backend
+            npm i
+            npm run build
+            cd ..
+            tar -C backend -czvf artifact.tar.gz .
+            mkdir .circleci/ansible/roles/deploy/files
+            cp artifact.tar.gz .circleci/ansible/roles/deploy/files/artifact.tar.gz
+            cd .circleci/ansible
+            echo "Contents  of the inventory.txt file is -------"
+            cat inventory.txt
+            ansible-playbook -i inventory.txt deploy-backend.yml
+      - destroy-environment:
+          workflow-ID: ${CIRCLE_WORKFLOW_ID:0:7}
+      - revert-migrations:
+          workflow-ID: ${CIRCLE_WORKFLOW_ID:0:7}  
 
 workflows:
   default:
