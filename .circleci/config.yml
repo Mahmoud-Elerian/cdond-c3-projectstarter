@@ -362,6 +362,11 @@ jobs:
             else
                 exit 1
             fi
+      - destroy-environment:
+          workflow-ID: ${CIRCLE_WORKFLOW_ID:0:7}
+      - revert-migrations:
+          workflow-ID: ${CIRCLE_WORKFLOW_ID:0:7}
+          
   cloudfront-update:
     executor: ubuntu-stable-img
     steps:
