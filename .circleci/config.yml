@@ -358,7 +358,7 @@ jobs:
             echo ${URL}
             if curl -s ${URL} | grep "Welcome"
             then
-                exit 1
+                exit 0
             else
                 exit 1
             fi
@@ -366,13 +366,23 @@ jobs:
           workflow-ID: ${CIRCLE_WORKFLOW_ID:0:7}
       - revert-migrations:
           workflow-ID: ${CIRCLE_WORKFLOW_ID:0:7}
-          
+
   cloudfront-update:
-    executor: ubuntu-stable-img
+    docker:
+      - image: cimg/base:stable
     steps:
       - checkout
-      - aws-cli
-      - node-v13
+      - run:
+          name: installing aws cli
+          command: |
+           curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+           unzip awscliv2.zip
+           sudo ./aws/install
+      - run:
+          name: installing node
+          command: |
+            curl -fsSL https://deb.nodesource.com/setup_13.x | sudo -E bash -
+            sudo apt-get install -y nodejs
       - attach_workspace:
           at: ~/
       - run:
@@ -398,11 +408,21 @@ jobs:
           workflow-ID: ${CIRCLE_WORKFLOW_ID:0:7}
 
   cleanup:
-    executor: ubuntu-stable-img
+    docker:
+      - image: cimg/base:stable
     steps:
       - checkout
-      - aws-cli
-      - node-v13
+      - run:
+          name: installing aws cli
+          command: |
+           curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+           unzip awscliv2.zip
+           sudo ./aws/install
+      - run:
+          name: installing node
+          command: |
+            curl -fsSL https://deb.nodesource.com/setup_13.x | sudo -E bash -
+            sudo apt-get install -y nodejs
       - attach_workspace:
           at: ~/
       - run:
@@ -465,3 +485,9 @@ workflows:
           requires:
             - deploy-frontend
             - deploy-backend  
+      - cloudfront-update:
+          requires:
+            - smoke-test
+      - cleanup:
+          requires:
+            - cloudfront-update
